@@ -1,0 +1,15 @@
+services:
+  cms-market-mcp:
+    build: .
+    command: ["cms-market-mcp", "--transport", "streamable-http"]
+    ports:
+      - "8000:8000"
+    environment:
+      CMS_MARKET_MCP_HOST: "0.0.0.0"
+      CMS_MARKET_MCP_PORT: "8000"
+      CMS_MARKET_CACHE_PATH: "/app/.cache/cms_market_cache.sqlite3"
+      CMS_MARKET_DEFAULT_MAX_ROWS: "5000"
+    volumes:
+      - ./data:/app/data:ro
+      - ./.cache:/app/.cache
+      - ./examples:/app/examples

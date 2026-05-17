@@ -1,0 +1,6 @@
+{
+  "connector_name": "CMS Public Market Intelligence",
+  "description": "Search and analyze free public CMS healthcare market data nationally, then filter by state, county, city, ZIP, provider, CCN, NPI, hospital opportunity, SNF opportunity, hospice market share proxies, and optional internal admissions CSV gap analysis. Does not provide exact referral leakage unless internal admissions data supports it.",
+  "connector_url_example": "https://your-public-https-host.example/mcp",
+  "authentication": "No authentication for private testing only. Add OAuth or another access control layer before sharing beyond your own development environment."
+}

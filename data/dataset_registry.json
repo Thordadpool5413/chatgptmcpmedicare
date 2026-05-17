@@ -1,0 +1,101 @@
+{
+  "cms_data_api": {
+    "base_url": "https://data.cms.gov/data-api/v1",
+    "notes": "Public CMS Data API. No API key is required for public datasets."
+  },
+  "provider_data_catalog_api": {
+    "base_url": "https://data.cms.gov/provider-data/api/1",
+    "notes": "Provider Data Catalog API for Medicare.gov provider comparison datasets."
+  },
+  "nppes_api": {
+    "base_url": "https://npiregistry.cms.hhs.gov/api/",
+    "notes": "Public NPI Registry API. Uses version 2.1."
+  },
+  "datasets": {
+    "pac_hospice_latest": {
+      "name": "Medicare Post Acute Care Utilization Hospice",
+      "dataset_uuid": "4e73f1b5-82cb-4682-8ad2-28493f0b6840",
+      "kind": "cms_data_api",
+      "use_for": [
+        "hospice market share proxy",
+        "beneficiary volume",
+        "days of care",
+        "payment volume",
+        "competitor volume"
+      ],
+      "free_use_boundary": "Public use file. Good for market share proxies, not exact referral source flow.",
+      "landing_page": "https://data.cms.gov/provider-summary-by-type-of-service/medicare-post-acute-care-hospice/medicare-post-acute-care-utilization-hospice"
+    },
+    "inpatient_provider_service_latest": {
+      "name": "Medicare Inpatient Hospitals by Provider and Service",
+      "dataset_uuid": "690ddc6c-2767-4618-b277-420ffb2bf27c",
+      "kind": "cms_data_api",
+      "use_for": [
+        "hospital discharge opportunity",
+        "DRG volume",
+        "hospice relevant acute care opportunity"
+      ],
+      "free_use_boundary": "Public Original Medicare inpatient discharge summary data. Good for opportunity scoring, not actual hospice referral proof.",
+      "landing_page": "https://data.cms.gov/provider-summary-by-type-of-service/medicare-inpatient-hospitals/medicare-inpatient-hospitals-by-provider-and-service"
+    },
+    "hospice_provider_data": {
+      "name": "Hospice Provider Data",
+      "provider_dataset_id": "252m-zfp9",
+      "kind": "provider_data_catalog_api",
+      "use_for": [
+        "hospice provider quality",
+        "provider compare",
+        "public hospice quality positioning"
+      ],
+      "free_use_boundary": "Public quality and provider comparison data. Not a referral source dataset.",
+      "landing_page": "https://data.cms.gov/provider-data/dataset/252m-zfp9"
+    },
+    "hospice_general_information": {
+      "name": "Hospice General Information",
+      "provider_dataset_id": "yc9t-dgbk",
+      "kind": "provider_data_catalog_api",
+      "use_for": [
+        "hospice provider address",
+        "phone",
+        "ownership",
+        "provider identity enrichment"
+      ],
+      "free_use_boundary": "Public provider characteristics. Useful for enrichment, not referral flow.",
+      "landing_page": "https://data.cms.gov/provider-data/dataset/yc9t-dgbk"
+    },
+    "nursing_home_provider_information": {
+      "name": "Nursing Home Provider Information",
+      "provider_dataset_id": "4pq5-n9py",
+      "kind": "provider_data_catalog_api",
+      "use_for": [
+        "SNF opportunity",
+        "nursing home beds",
+        "ratings",
+        "staffing",
+        "provider compare"
+      ],
+      "free_use_boundary": "Public nursing home characteristics and quality data. Good for opportunity scoring, not actual referrals.",
+      "landing_page": "https://data.cms.gov/provider-data/dataset/4pq5-n9py"
+    },
+    "nppes_npi_registry": {
+      "name": "NPPES NPI Registry API",
+      "kind": "nppes_api",
+      "use_for": [
+        "NPI lookup",
+        "provider identity",
+        "taxonomy lookup",
+        "organization lookup"
+      ],
+      "free_use_boundary": "Public NPI records. NPI issuance does not validate licensure or credentialing.",
+      "landing_page": "https://npiregistry.cms.hhs.gov/api-page"
+    }
+  },
+  "restricted_or_not_free_sources": {
+    "beneficiary_level_medicare_claims": "Requires approved CMS research access, DUA, fees, or a licensed data vendor.",
+    "ccw": "Restricted research warehouse, not a free public MCP source.",
+    "vrdc": "Secure research environment with approval and user fees.",
+    "casper_iqies": "Role based provider access. Not open public data.",
+    "raw_oasis_or_hope_assessments": "Patient level assessment data is restricted. Public quality measures can be used instead.",
+    "exact_referral_leakage": "Not freely published by CMS. Requires internal referral data, approved claims data, or paid analytics."
+  }
+}

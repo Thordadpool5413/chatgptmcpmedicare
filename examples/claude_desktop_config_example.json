@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "cms_public_market": {
+      "command": "python",
+      "args": ["-m", "cms_market_mcp.server"],
+      "env": {
+        "CMS_MARKET_INTERNAL_ADMISSIONS_CSV": "/absolute/path/to/admissions.csv"
+      }
+    }
+  }
+}
