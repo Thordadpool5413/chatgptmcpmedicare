@@ -1,0 +1,8 @@
+Use CMS Public Market Intelligence to cache the core national datasets.
+Show me the cached national datasets.
+Run national hospice market share proxy and show the top providers nationally.
+Filter national hospital hospice opportunity to Florida.
+Filter national nursing home opportunity to Brevard County Florida.
+Query the cached national hospice provider data for provider name VITAS.
+Validate my internal admissions CSV.
+Compare my internal admissions CSV against national hospital opportunity and show referral gaps.

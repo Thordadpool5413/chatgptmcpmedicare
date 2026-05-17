@@ -1,0 +1,6 @@
+admit_date,patient_id,market,county,zip,referral_source,referral_source_type,facility_npi,physician_npi,payer,diagnosis_group,marketer,admission_status
+2026-01-04,EXAMPLE001,Brevard,Brevard,32937,Example Hospital,Hospital,,1234567890,Medicare,Heart Failure,Amy,Admitted
+2026-01-08,EXAMPLE002,Brevard,Brevard,32940,Example SNF,SNF,1098765432,,Medicare Advantage,COPD,Amy,Admitted
+2026-01-15,EXAMPLE003,Orlando,Orange,32801,Example Physician Group,Physician Group,,1122334455,Medicare,Cancer,Jordan,Admitted
+2026-02-02,EXAMPLE004,Brevard,Brevard,32937,Example Hospital,Hospital,,1234567890,Medicare,Sepsis,Amy,Admitted
+2026-02-10,EXAMPLE005,Brevard,Brevard,32940,Example SNF,SNF,1098765432,,Medicare Advantage,Dementia,Amy,Declined

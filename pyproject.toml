@@ -1,0 +1,27 @@
+[project]
+name = "cms-public-market-mcp"
+version = "1.0.0"
+description = "National first free public CMS market intelligence MCP server for hospice, hospital opportunity, SNF opportunity, NPI lookup, local national caching, filtering, ChatGPT MCP app testing, and internal admissions gap analysis."
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "Nick Lynch" }]
+dependencies = [
+  "mcp[cli]>=1.9.0"
+]
+
+[project.scripts]
+cms-market-mcp = "cms_market_mcp.server:main"
+cms-market-admin = "cms_market_mcp.cli:main"
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0.0"
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 140
+src = ["src", "tests"]
