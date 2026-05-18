@@ -18,33 +18,41 @@ jobs:
           password: ${{ secrets.SSH_PASSWORD }}
           command_timeout: 20m
           script: |
-            echo "=== Connected to Hostinger ==="
-            echo "Node: $(node -v 2>/dev/null || echo 'not found')"
-            echo "NPM:  $(npm -v 2>/dev/null || echo 'not found')"
-            echo "HOME: $HOME"
-            echo "PORT: ${PORT:-not set}"
-            ls ~
+            echo "=== ENVIRONMENT ==="
+            echo "HOME=$HOME"
+            echo "PORT=${PORT:-not set}"
+            echo "NODE_ENV=${NODE_ENV:-not set}"
+            node -v 2>/dev/null || echo "node: not found"
+            npm -v 2>/dev/null || echo "npm: not found"
+            pm2 -v 2>/dev/null || echo "pm2: not found"
+            passenger -v 2>/dev/null || echo "passenger: not found"
 
-            # Clone or update repo
+            echo "=== HOME DIRECTORY ==="
+            ls -la ~
+
+            echo "=== LOOKING FOR NODEJS APP DIRS ==="
+            for d in ~/nodejs ~/node ~/apps ~/public_html ~/domains; do
+              [ -d "$d" ] && echo "EXISTS: $d" && ls "$d" || true
+            done
+
+            echo "=== LOOKING FOR EXISTING server.js or app.js ==="
+            find ~ -maxdepth 4 -name "server.js" -o -name "app.js" -o -name "index.js" 2>/dev/null | grep -v node_modules || true
+
+            echo "=== LOOKING FOR .htaccess or passenger files ==="
+            find ~ -maxdepth 4 -name ".htaccess" -o -name "passenger_node_app_root" 2>/dev/null || true
+
+            echo "=== RUNNING PROCESSES ==="
+            ps aux | grep -E "node|passenger|pm2" | grep -v grep || true
+
+            echo "=== CLONE/UPDATE REPO ==="
             REPO="$HOME/chatgptmcpmedicare"
             if [ ! -d "$REPO/.git" ]; then
-              echo "=== Cloning repo ==="
               git clone https://github.com/Thordadpool5413/chatgptmcpmedicare.git "$REPO"
             else
-              echo "=== Pulling latest ==="
-              cd "$REPO"
-              git fetch origin main
-              git reset --hard origin/main
+              cd "$REPO" && git fetch origin main && git reset --hard origin/main
             fi
 
-            cd "$REPO/web"
-            echo "=== Installing & building ==="
-            npm install --prefer-offline 2>&1 || npm install 2>&1
+            echo "=== BUILD ==="
+            cd "$REPO/web" && npm install
 
-            echo "=== Build complete ==="
-            ls "$REPO/web/.next" && echo ".next exists"
-
-            # Try PM2 restart first (Hostinger often uses PM2)
-            pm2 restart all 2>/dev/null && echo "PM2 restarted" || echo "PM2 not available"
-
-            echo "=== Done ==="
+            echo "=== DONE - check output above for directory structure ==="
