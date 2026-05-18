@@ -24,11 +24,26 @@ export async function callTool(name: string, args: Record<string, unknown> = {})
     params: { name, arguments: args },
   };
 
-  const res = await fetch(MCP_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "application/json, text/event-stream" },
-    body: JSON.stringify(body),
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 30_000);
+
+  let res: Response;
+  try {
+    res = await fetch(MCP_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json, text/event-stream" },
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+  } catch (err) {
+    clearTimeout(timeout);
+    if ((err as Error).name === "AbortError") {
+      throw new Error("MCP server timed out after 30 seconds. Is the Python backend running?");
+    }
+    throw new Error(`Cannot reach MCP server at ${MCP_URL}: ${(err as Error).message}`);
+  } finally {
+    clearTimeout(timeout);
+  }
 
   if (!res.ok) throw new Error(`MCP HTTP ${res.status}`);
 
