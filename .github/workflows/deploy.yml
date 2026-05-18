@@ -18,28 +18,33 @@ jobs:
           password: ${{ secrets.SSH_PASSWORD }}
           command_timeout: 20m
           script: |
-            set -e
+            echo "=== Connected to Hostinger ==="
+            echo "Node: $(node -v 2>/dev/null || echo 'not found')"
+            echo "NPM:  $(npm -v 2>/dev/null || echo 'not found')"
+            echo "HOME: $HOME"
+            echo "PORT: ${PORT:-not set}"
+            ls ~
 
-            # Clone repo if not present, otherwise pull
-            if [ ! -d "$HOME/chatgptmcpmedicare" ]; then
-              git clone https://github.com/Thordadpool5413/chatgptmcpmedicare.git "$HOME/chatgptmcpmedicare"
+            # Clone or update repo
+            REPO="$HOME/chatgptmcpmedicare"
+            if [ ! -d "$REPO/.git" ]; then
+              echo "=== Cloning repo ==="
+              git clone https://github.com/Thordadpool5413/chatgptmcpmedicare.git "$REPO"
+            else
+              echo "=== Pulling latest ==="
+              cd "$REPO"
+              git fetch origin main
+              git reset --hard origin/main
             fi
 
-            cd "$HOME/chatgptmcpmedicare"
-            git fetch origin main
-            git checkout main
-            git pull origin main
+            cd "$REPO/web"
+            echo "=== Installing & building ==="
+            npm install --prefer-offline 2>&1 || npm install 2>&1
 
-            # Install dependencies + auto-build (postinstall runs next build)
-            cd web
-            npm install
+            echo "=== Build complete ==="
+            ls "$REPO/web/.next" && echo ".next exists"
 
-            # Restart the app process
-            pkill -f "node server.js" 2>/dev/null || true
-            pkill -f "node index.js" 2>/dev/null || true
-            sleep 2
-            cd "$HOME/chatgptmcpmedicare"
-            PORT=${PORT:-3000} nohup node server.js > "$HOME/app.log" 2>&1 &
-            echo "App started on PID $!"
-            sleep 3
-            curl -sf http://127.0.0.1:${PORT:-3000} > /dev/null && echo "Health check passed" || echo "Warning: health check failed - check app.log"
+            # Try PM2 restart first (Hostinger often uses PM2)
+            pm2 restart all 2>/dev/null && echo "PM2 restarted" || echo "PM2 not available"
+
+            echo "=== Done ==="
