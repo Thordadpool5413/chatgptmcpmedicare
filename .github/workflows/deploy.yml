@@ -9,50 +9,64 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Deploy via SSH
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: 145.79.4.132
-          port: 65002
-          username: u510071480
-          password: ${{ secrets.SSH_PASSWORD }}
-          command_timeout: 20m
-          script: |
-            echo "=== ENVIRONMENT ==="
-            echo "HOME=$HOME"
-            echo "PORT=${PORT:-not set}"
-            echo "NODE_ENV=${NODE_ENV:-not set}"
-            node -v 2>/dev/null || echo "node: not found"
-            npm -v 2>/dev/null || echo "npm: not found"
-            pm2 -v 2>/dev/null || echo "pm2: not found"
-            passenger -v 2>/dev/null || echo "passenger: not found"
+      - name: Install paramiko
+        run: pip install paramiko
 
-            echo "=== HOME DIRECTORY ==="
-            ls -la ~
+      - name: Deploy via SSH (Python)
+        env:
+          SSH_PASS: ${{ secrets.SSH_PASSWORD }}
+        run: |
+          python3 << 'PYEOF'
+          import paramiko
+          import os
+          import sys
+          import time
 
-            echo "=== LOOKING FOR NODEJS APP DIRS ==="
-            for d in ~/nodejs ~/node ~/apps ~/public_html ~/domains; do
-              [ -d "$d" ] && echo "EXISTS: $d" && ls "$d" || true
-            done
+          host = "145.79.4.132"
+          port = 65002
+          user = "u510071480"
+          password = os.environ["SSH_PASS"]
 
-            echo "=== LOOKING FOR EXISTING server.js or app.js ==="
-            find ~ -maxdepth 4 -name "server.js" -o -name "app.js" -o -name "index.js" 2>/dev/null | grep -v node_modules || true
+          commands = """
+          echo "=== Connected ===" && \
+          echo "HOME=$HOME PORT=${PORT:-unset}" && \
+          node -v && \
+          ls ~ && \
+          REPO="$HOME/chatgptmcpmedicare" && \
+          if [ ! -d "$REPO/.git" ]; then
+            git clone https://github.com/Thordadpool5413/chatgptmcpmedicare.git "$REPO"
+          else
+            cd "$REPO" && git fetch origin main && git reset --hard origin/main
+          fi && \
+          cd "$REPO/web" && npm install && \
+          pm2 restart all 2>/dev/null || true && \
+          echo "=== Deploy complete ==="
+          """
 
-            echo "=== LOOKING FOR .htaccess or passenger files ==="
-            find ~ -maxdepth 4 -name ".htaccess" -o -name "passenger_node_app_root" 2>/dev/null || true
+          client = paramiko.SSHClient()
+          client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 
-            echo "=== RUNNING PROCESSES ==="
-            ps aux | grep -E "node|passenger|pm2" | grep -v grep || true
+          print(f"Connecting to {host}:{port}...")
+          for attempt in range(3):
+              try:
+                  client.connect(host, port=port, username=user, password=password,
+                                 timeout=30, banner_timeout=30, auth_timeout=30)
+                  print("Connected!")
+                  break
+              except Exception as e:
+                  print(f"Attempt {attempt+1} failed: {e}")
+                  if attempt < 2:
+                      time.sleep(5)
+                  else:
+                      sys.exit(1)
 
-            echo "=== CLONE/UPDATE REPO ==="
-            REPO="$HOME/chatgptmcpmedicare"
-            if [ ! -d "$REPO/.git" ]; then
-              git clone https://github.com/Thordadpool5413/chatgptmcpmedicare.git "$REPO"
-            else
-              cd "$REPO" && git fetch origin main && git reset --hard origin/main
-            fi
+          stdin, stdout, stderr = client.exec_command(commands, timeout=1200, get_pty=True)
+          for line in iter(stdout.readline, ""):
+              print(line, end="")
+          exit_code = stdout.channel.recv_exit_status()
+          client.close()
 
-            echo "=== BUILD ==="
-            cd "$REPO/web" && npm install
-
-            echo "=== DONE - check output above for directory structure ==="
+          if exit_code != 0:
+              print(f"Script exited with code {exit_code}")
+              sys.exit(exit_code)
+          PYEOF
