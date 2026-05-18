@@ -7,9 +7,8 @@ import { StateSelect } from "@/components/shared/state-select";
 import { LoadingSpinner } from "@/components/shared/loading-spinner";
 import { ErrorBanner } from "@/components/shared/error-banner";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
 import { mcp } from "@/lib/api";
-import { formatPercent, formatNumber } from "@/lib/utils";
+import { formatNumber } from "@/lib/utils";
 import type { HospiceResult, HospiceRow } from "@/lib/cms-direct";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
