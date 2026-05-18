@@ -9,64 +9,14 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Install paramiko
-        run: pip install paramiko
-
-      - name: Deploy via SSH (Python)
-        env:
-          SSH_PASS: ${{ secrets.SSH_PASSWORD }}
+      - name: Trigger deploy webhook
         run: |
-          python3 << 'PYEOF'
-          import paramiko
-          import os
-          import sys
-          import time
-
-          host = "145.79.4.132"
-          port = 65002
-          user = "u510071480"
-          password = os.environ["SSH_PASS"]
-
-          commands = """
-          echo "=== Connected ===" && \
-          echo "HOME=$HOME PORT=${PORT:-unset}" && \
-          node -v && \
-          ls ~ && \
-          REPO="$HOME/chatgptmcpmedicare" && \
-          if [ ! -d "$REPO/.git" ]; then
-            git clone https://github.com/Thordadpool5413/chatgptmcpmedicare.git "$REPO"
-          else
-            cd "$REPO" && git fetch origin main && git reset --hard origin/main
-          fi && \
-          cd "$REPO/web" && npm install && \
-          pm2 restart all 2>/dev/null || true && \
-          echo "=== Deploy complete ==="
-          """
-
-          client = paramiko.SSHClient()
-          client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-
-          print(f"Connecting to {host}:{port}...")
-          for attempt in range(3):
-              try:
-                  client.connect(host, port=port, username=user, password=password,
-                                 timeout=30, banner_timeout=30, auth_timeout=30)
-                  print("Connected!")
-                  break
-              except Exception as e:
-                  print(f"Attempt {attempt+1} failed: {e}")
-                  if attempt < 2:
-                      time.sleep(5)
-                  else:
-                      sys.exit(1)
-
-          stdin, stdout, stderr = client.exec_command(commands, timeout=1200, get_pty=True)
-          for line in iter(stdout.readline, ""):
-              print(line, end="")
-          exit_code = stdout.channel.recv_exit_status()
-          client.close()
-
-          if exit_code != 0:
-              print(f"Script exited with code {exit_code}")
-              sys.exit(exit_code)
-          PYEOF
+          echo "Calling deploy webhook..."
+          RESPONSE=$(curl -sf -X POST \
+            -H "x-deploy-secret: ${{ secrets.DEPLOY_SECRET }}" \
+            -H "Content-Type: application/json" \
+            --max-time 15 \
+            "https://u510071480.medicaremarketintelligence.thordad.com/api/deploy" \
+            2>&1) || true
+          echo "Response: $RESPONSE"
+          echo "Deploy triggered — build runs on the server in the background."
