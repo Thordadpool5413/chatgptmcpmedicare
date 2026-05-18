@@ -1,0 +1,12 @@
+{
+  "name": "cms-market-intelligence",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "start": "node server.js",
+    "postinstall": "cd web && npm install"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
