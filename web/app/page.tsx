@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { BarChart3, Building2, BedDouble, Search, Database } from "lucide-react";
+import { BarChart3, Building2, BedDouble, Search, Database, MessageSquare } from "lucide-react";
 import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 
 const sections = [
@@ -37,6 +37,30 @@ export default function DashboardPage() {
         <p className="mt-2 text-[hsl(var(--muted-foreground))]">
           Hospice market analysis powered by free CMS public data — no subscriptions, no vendor lock-in.
         </p>
+      </div>
+
+      <div className="mb-6">
+        <Card className="border-[hsl(var(--primary)/0.3)] bg-[hsl(var(--primary)/0.05)]">
+          <CardHeader>
+            <div className="flex items-center gap-3">
+              <div className="rounded-lg bg-[hsl(var(--primary)/0.15)] p-2">
+                <MessageSquare className="h-5 w-5 text-[hsl(var(--primary))]" />
+              </div>
+              <CardTitle>AI Chat — Ask Anything</CardTitle>
+            </div>
+            <CardDescription>
+              Ask Claude about hospice markets, hospital opportunities, nursing homes, or any provider — it pulls live CMS data to answer.
+            </CardDescription>
+          </CardHeader>
+          <CardFooter>
+            <Link
+              href="/chat"
+              className="inline-flex h-9 items-center rounded-md bg-[hsl(var(--primary))] px-4 text-sm font-medium text-[hsl(var(--primary-foreground))] hover:opacity-90 transition-opacity"
+            >
+              Open Chat
+            </Link>
+          </CardFooter>
+        </Card>
       </div>
 
       <div className="grid gap-6 sm:grid-cols-2">
