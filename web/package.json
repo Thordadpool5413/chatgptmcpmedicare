@@ -6,6 +6,7 @@
     "dev": "next dev",
     "build": "next build",
     "start": "node server.js",
+    "postinstall": "next build",
     "lint": "eslint"
   },
   "dependencies": {
