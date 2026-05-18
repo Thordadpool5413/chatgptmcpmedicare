@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Search } from "lucide-react";
+import { Search, ExternalLink } from "lucide-react";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { StateSelect } from "@/components/shared/state-select";
@@ -118,7 +119,17 @@ export default function NursingHomePage() {
               <TableBody>
                 {result.rows.map((row, i) => (
                   <TableRow key={i}>
-                    <TableCell className="font-medium max-w-[160px] truncate" title={row["Provider Name"]}>{row["Provider Name"] ?? "—"}</TableCell>
+                    <TableCell className="font-medium max-w-[160px] truncate" title={row["Provider Name"]}>
+                      {row["CMS Certification Number (CCN)"] ? (
+                        <Link
+                          href={`/facility/${row["CMS Certification Number (CCN)"]}`}
+                          className="text-[hsl(var(--primary))] hover:underline flex items-center gap-1"
+                        >
+                          <span className="truncate">{row["Provider Name"] ?? "—"}</span>
+                          <ExternalLink className="h-3 w-3 shrink-0" />
+                        </Link>
+                      ) : (row["Provider Name"] ?? "—")}
+                    </TableCell>
                     <TableCell className="text-xs max-w-[140px] truncate" title={row["Provider Address"] as string}>{row["Provider Address"] ?? "—"}</TableCell>
                     <TableCell>{row["City/Town"] ?? "—"}</TableCell>
                     <TableCell>{row.State ?? "—"}</TableCell>

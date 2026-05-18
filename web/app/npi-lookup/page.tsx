@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useState } from "react";
-import { Search } from "lucide-react";
+import { Search, ExternalLink } from "lucide-react";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { StateSelect } from "@/components/shared/state-select";
@@ -149,7 +150,18 @@ export default function NpiLookupPage() {
                         className="cursor-pointer"
                         onClick={() => setExpanded(isExpanded ? null : (p.number ?? null))}
                       >
-                        <TableCell className="font-mono text-xs">{p.number ?? "—"}</TableCell>
+                        <TableCell className="font-mono text-xs">
+                          {p.number ? (
+                            <Link
+                              href={`/provider/${p.number}`}
+                              className="text-[hsl(var(--primary))] underline underline-offset-2 flex items-center gap-1"
+                              onClick={(e) => e.stopPropagation()}
+                            >
+                              {p.number}
+                              <ExternalLink className="h-3 w-3" />
+                            </Link>
+                          ) : "—"}
+                        </TableCell>
                         <TableCell className="font-medium max-w-[180px] truncate">{getName(p)}</TableCell>
                         <TableCell className="text-xs">{p.basic?.credential ?? "—"}</TableCell>
                         <TableCell className="text-xs">{p.basic?.gender ?? "—"}</TableCell>

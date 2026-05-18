@@ -1,7 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { Search } from "lucide-react";
+import { Search, ExternalLink } from "lucide-react";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { StateSelect } from "@/components/shared/state-select";
@@ -112,7 +113,17 @@ export default function HospitalOpportunityPage() {
                     <TableCell>{row.Rndrng_Prvdr_City ?? "—"}</TableCell>
                     <TableCell>{row.Rndrng_Prvdr_State_Abrvtn ?? "—"}</TableCell>
                     <TableCell className="text-xs">{row.Rndrng_Prvdr_Zip_Cd ?? "—"}</TableCell>
-                    <TableCell className="text-xs">{row.Rndrng_Prvdr_CCN ?? "—"}</TableCell>
+                    <TableCell className="text-xs">
+                      {row.Rndrng_Prvdr_CCN ? (
+                        <Link
+                          href={`/hospital/${row.Rndrng_Prvdr_CCN}`}
+                          className="text-[hsl(var(--primary))] underline underline-offset-2 flex items-center gap-1 font-mono"
+                        >
+                          {row.Rndrng_Prvdr_CCN}
+                          <ExternalLink className="h-3 w-3" />
+                        </Link>
+                      ) : "—"}
+                    </TableCell>
                     <TableCell className="text-xs">{row.DRG_Cd ?? "—"}</TableCell>
                     <TableCell className="max-w-[200px] truncate text-xs" title={row.DRG_Desc}>{row.DRG_Desc ?? "—"}</TableCell>
                     <TableCell className="text-right">{formatNumber(Number(row.Tot_Dschrgs))}</TableCell>

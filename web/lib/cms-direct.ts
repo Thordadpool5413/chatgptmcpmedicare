@@ -7,11 +7,19 @@ const NPPES_API = "https://npiregistry.cms.hhs.gov/api/";
 const HOSPICE_UUID = "4e73f1b5-82cb-4682-8ad2-28493f0b6840";
 const HOSPITAL_UUID = "690ddc6c-2767-4618-b277-420ffb2bf27c";
 const NURSING_HOME_ID = "4pq5-n9py";
+// Medicare Part B - Physicians & Other Practitioners by Provider and Service
+const PHYSICIAN_UUID = "9552459c-79f3-4c9b-9683-5af8f10ea71d";
 
 export function num(v: unknown): number {
   if (v == null) return 0;
   const n = parseFloat(String(v).replace(/,/g, "").replace(/\$/g, "").replace(/%/g, ""));
   return isNaN(n) ? 0 : n;
+}
+
+export function currency(v: unknown): string {
+  const n = num(v);
+  if (!n) return "—";
+  return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(n);
 }
 
 function findCol(row: Record<string, unknown>, candidates: string[]): string | null {
@@ -23,9 +31,9 @@ function findCol(row: Record<string, unknown>, candidates: string[]): string | n
   return null;
 }
 
-const HOSPICE_DRG_TERMS = [
-  "heart failure","sepsis","respiratory","copd","pneumonia","renal failure",
-  "kidney","stroke","malignancy","cancer","dementia","cirrhosis","liver","failure",
+export const HOSPICE_DRG_TERMS = [
+  "heart failure", "sepsis", "respiratory", "copd", "pneumonia", "renal failure",
+  "kidney", "stroke", "malignancy", "cancer", "dementia", "cirrhosis", "liver", "failure",
 ];
 
 // ─── Hospice Market Share ─────────────────────────────────────────────────────
@@ -37,6 +45,7 @@ export interface HospiceRow {
   _market_total_volume: number;
   _market_share_pct: number;
   _rank: number;
+  Rndrng_Prvdr_NPI?: string;
   Rndrng_Prvdr_Org_Name?: string;
   Rndrng_Prvdr_City?: string;
   Rndrng_Prvdr_State_Abrvtn?: string;
@@ -45,6 +54,13 @@ export interface HospiceRow {
   Tot_Mdcr_Pymt_Amt?: number;
   Bene_Avg_Age?: number;
   Bene_Avg_Risk_Scre?: number;
+  Bene_Feml_Cnt?: number;
+  Bene_Male_Cnt?: number;
+  Bene_Dual_Cnt?: number;
+  Bene_CC_CHF_Pct?: number;
+  Bene_CC_COPD_Pct?: number;
+  Bene_CC_Alzhmr_Pct?: number;
+  Bene_CC_CancerX_Pct?: number;
   [key: string]: unknown;
 }
 
@@ -70,9 +86,9 @@ export async function getHospiceMarketShare(state?: string, maxRows = 200): Prom
   if (!data.length) return { rows: [], provider_column_used: "", volume_column_used: "", market_column_used: "", total_volume: 0, market_totals: {}, interpretation_note: "No data found." };
 
   const sample = data[0];
-  const provCol = findCol(sample, ["Rndrng_Prvdr_Org_Name","ProviderName","Provider"]) ?? Object.keys(sample)[0];
-  const volCol = findCol(sample, ["Tot_Benes","TotBenes","Beneficiaries","Total_Benes"]) ?? findCol(sample, ["Tot"]) ?? Object.keys(sample)[2];
-  const mktCol = findCol(sample, ["Rndrng_Prvdr_City","City"]) ?? findCol(sample, ["County","HRR"]) ?? findCol(sample, ["Rndrng_Prvdr_State_Abrvtn","State"]) ?? "";
+  const provCol = findCol(sample, ["Rndrng_Prvdr_Org_Name", "ProviderName", "Provider"]) ?? Object.keys(sample)[0];
+  const volCol = findCol(sample, ["Tot_Benes", "TotBenes", "Beneficiaries", "Total_Benes"]) ?? findCol(sample, ["Tot"]) ?? Object.keys(sample)[2];
+  const mktCol = findCol(sample, ["Rndrng_Prvdr_City", "City"]) ?? findCol(sample, ["County", "HRR"]) ?? findCol(sample, ["Rndrng_Prvdr_State_Abrvtn", "State"]) ?? "";
 
   const mktTotals: Record<string, number> = {};
   let totalVolume = 0;
@@ -171,6 +187,80 @@ export async function getHospitalOpportunity(
   };
 }
 
+// ─── Hospital Profile (single hospital by CCN) ────────────────────────────────
+
+export interface HospitalProfile {
+  name: string;
+  city: string;
+  state: string;
+  zip: string;
+  ccn: string;
+  drgs: HospitalRow[];
+  totals: {
+    total_discharges: number;
+    avg_medicare_payment: number;
+    drg_count: number;
+    hospice_drg_count: number;
+    est_total_medicare_payments: number;
+  };
+  opportunity_score: number;
+}
+
+export async function getHospitalProfile(ccn: string): Promise<HospitalProfile | null> {
+  const params = new URLSearchParams({ "filter[Rndrng_Prvdr_CCN]": ccn, size: "1000" });
+  const res = await fetch(`${CMS_DATA_API}/dataset/${HOSPITAL_UUID}/data?${params}`, {
+    signal: AbortSignal.timeout(30_000),
+  });
+  if (!res.ok) return null;
+  const data = (await res.json()) as Record<string, unknown>[];
+  if (!data.length) return null;
+
+  const first = data[0];
+  const drgs: HospitalRow[] = data.map((row) => {
+    const drg = String(row.DRG_Desc ?? "").toLowerCase();
+    const discharges = num(row.Tot_Dschrgs);
+    const payment = num(row.Avg_Mdcr_Pymt_Amt);
+    const matched = HOSPICE_DRG_TERMS.filter((t) => drg.includes(t));
+    const clinicalWeight = 1.0 + 0.35 * matched.length;
+    const paymentWeight = Math.min(payment / 10000, 10);
+    const score = discharges * clinicalWeight + paymentWeight;
+    return {
+      ...row,
+      _opportunity_score: parseFloat(score.toFixed(2)),
+      _matched_hospice_terms: matched,
+      _opportunity_reason: matched.length
+        ? `Hospice DRGs: ${matched.slice(0, 3).join(", ")}`
+        : "Volume only",
+    } as HospitalRow;
+  });
+  drgs.sort((a, b) => b._opportunity_score - a._opportunity_score);
+
+  const total_discharges = drgs.reduce((s, r) => s + num(r.Tot_Dschrgs), 0);
+  const est_total_medicare_payments = drgs.reduce(
+    (s, r) => s + num(r.Avg_Mdcr_Pymt_Amt) * num(r.Tot_Dschrgs), 0
+  );
+  const avg_medicare_payment = total_discharges > 0 ? est_total_medicare_payments / total_discharges : 0;
+  const hospice_drg_count = drgs.filter((d) => d._matched_hospice_terms.length > 0).length;
+  const opportunity_score = drgs.slice(0, 20).reduce((s, r) => s + r._opportunity_score, 0);
+
+  return {
+    name: String(first.Rndrng_Prvdr_Org_Name ?? ""),
+    city: String(first.Rndrng_Prvdr_City ?? ""),
+    state: String(first.Rndrng_Prvdr_State_Abrvtn ?? ""),
+    zip: String(first.Rndrng_Prvdr_Zip_Cd ?? ""),
+    ccn,
+    drgs,
+    totals: {
+      total_discharges,
+      avg_medicare_payment,
+      drg_count: drgs.length,
+      hospice_drg_count,
+      est_total_medicare_payments,
+    },
+    opportunity_score: parseFloat(opportunity_score.toFixed(2)),
+  };
+}
+
 // ─── Nursing Home Opportunity ─────────────────────────────────────────────────
 
 export interface NursingHomeRow {
@@ -189,6 +279,10 @@ export interface NursingHomeRow {
   "QM Rating"?: number;
   "Staffing Rating"?: number;
   "RN Staffing Rating"?: number;
+  "Long-Stay QM Rating"?: number;
+  "Short-Stay QM Rating"?: number;
+  "Abuse Icon"?: string;
+  "County/Parish"?: string;
   _snf_opportunity_score: number;
   _beds_used_for_score: number;
   _quality_pressure_component: number;
@@ -237,6 +331,40 @@ export async function getNursingHomeOpportunity(
   };
 }
 
+// ─── Nursing Home Profile (single facility by CCN) ───────────────────────────
+
+export async function getNursingHomeProfile(ccn: string): Promise<NursingHomeRow | null> {
+  const res = await fetch(`${PROVIDER_DATA_API}/datastore/query/${NURSING_HOME_ID}/0`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      conditions: [{ property: "CMS Certification Number (CCN)", value: ccn, operator: "=" }],
+      limit: 1,
+      offset: 0,
+    }),
+    signal: AbortSignal.timeout(30_000),
+  });
+  if (!res.ok) return null;
+  const json = (await res.json()) as { results?: Record<string, unknown>[] };
+  const row = json.results?.[0];
+  if (!row) return null;
+
+  const beds = num(row["Number of Certified Beds"]);
+  const overall = num(row["Overall Rating"]) || 3;
+  const staffing = num(row["Staffing Rating"]) || 3;
+  const qm = num(row["QM Rating"]) || 3;
+  const qualityPressure =
+    Math.max(0, 5 - overall) + Math.max(0, 5 - staffing) * 0.5 + Math.max(0, 5 - qm) * 0.35;
+  const score = beds + qualityPressure * 18;
+
+  return {
+    ...row,
+    _snf_opportunity_score: parseFloat(score.toFixed(2)),
+    _beds_used_for_score: beds,
+    _quality_pressure_component: parseFloat(qualityPressure.toFixed(2)),
+  } as NursingHomeRow;
+}
+
 // ─── NPI Lookup ───────────────────────────────────────────────────────────────
 
 export interface NpiResult {
@@ -269,4 +397,104 @@ export async function lookupNpi(params: {
     rows: (json.results ?? []) as Record<string, unknown>[],
     result_count: json.result_count ?? 0,
   };
+}
+
+// ─── Single NPI Full Profile ──────────────────────────────────────────────────
+
+export interface NpiProvider {
+  number: string;
+  enumeration_type: string;
+  basic: {
+    first_name?: string;
+    last_name?: string;
+    middle_name?: string;
+    name_prefix?: string;
+    name_suffix?: string;
+    organization_name?: string;
+    organizational_subpart?: string;
+    authorized_official_first_name?: string;
+    authorized_official_last_name?: string;
+    authorized_official_credential?: string;
+    authorized_official_title_or_position?: string;
+    credential?: string;
+    sole_proprietor?: string;
+    gender?: string;
+    enumeration_date?: string;
+    last_updated?: string;
+    status?: string;
+    name?: string;
+  };
+  addresses: Array<{
+    address_purpose: string;
+    address_type: string;
+    address_1: string;
+    address_2?: string;
+    city: string;
+    state: string;
+    postal_code: string;
+    country_code: string;
+    country_name: string;
+    telephone_number?: string;
+    fax_number?: string;
+  }>;
+  taxonomies: Array<{
+    code: string;
+    taxonomy_group?: string;
+    desc: string;
+    state?: string;
+    license?: string;
+    primary: boolean;
+  }>;
+  identifiers: Array<{
+    code: string;
+    desc?: string;
+    identifier: string;
+    issuer?: string;
+    state?: string;
+  }>;
+  endpoints?: Array<Record<string, unknown>>;
+  other_names?: Array<Record<string, unknown>>;
+}
+
+export async function getNpiByNumber(npi: string): Promise<NpiProvider | null> {
+  const q = new URLSearchParams({ version: "2.1", number: npi });
+  const res = await fetch(`${NPPES_API}?${q}`, { signal: AbortSignal.timeout(30_000) });
+  if (!res.ok) return null;
+  const json = (await res.json()) as { results?: unknown[] };
+  return (json.results?.[0] as NpiProvider) ?? null;
+}
+
+// ─── Medicare Part B Physician Data ──────────────────────────────────────────
+
+export interface PhysicianServiceRow {
+  Rndrng_NPI?: string;
+  Rndrng_Prvdr_Last_Org_Name?: string;
+  Rndrng_Prvdr_First_Name?: string;
+  HCPCS_Cd?: string;
+  HCPCS_Desc?: string;
+  HCPCS_Drug_Ind?: string;
+  Place_Of_Srvc?: string;
+  Tot_Benes?: number;
+  Tot_Srvcs?: number;
+  Tot_Bene_Day_Srvcs?: number;
+  Avg_Sbmtd_Chrg?: number;
+  Avg_Mdcr_Alowd_Amt?: number;
+  Avg_Mdcr_Pymt_Amt?: number;
+  Avg_Mdcr_Stdzd_Amt?: number;
+  Tot_Mdcr_Pymt_Amt?: number;
+  [key: string]: unknown;
+}
+
+export async function getMedicarePhysicianData(npi: string): Promise<PhysicianServiceRow[]> {
+  const params = new URLSearchParams({ "filter[Rndrng_NPI]": npi, size: "500" });
+  try {
+    const res = await fetch(`${CMS_DATA_API}/dataset/${PHYSICIAN_UUID}/data?${params}`, {
+      signal: AbortSignal.timeout(30_000),
+    });
+    if (!res.ok) return [];
+    const data = (await res.json()) as Record<string, unknown>[];
+    return (data ?? []) as PhysicianServiceRow[];
+  } catch {
+    return [];
+  }
 }

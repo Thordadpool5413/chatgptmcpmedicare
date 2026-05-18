@@ -4,6 +4,10 @@ import {
   getHospitalOpportunity,
   getNursingHomeOpportunity,
   lookupNpi,
+  getNpiByNumber,
+  getMedicarePhysicianData,
+  getHospitalProfile,
+  getNursingHomeProfile,
 } from "@/lib/cms-direct";
 
 export async function POST(req: NextRequest) {
@@ -44,6 +48,31 @@ export async function POST(req: NextRequest) {
       case "lookup_npi":
         result = await lookupNpi(args as Parameters<typeof lookupNpi>[0]);
         break;
+
+      case "get_provider_profile": {
+        const npi = args.npi as string;
+        if (!npi) return NextResponse.json({ error: "npi required" }, { status: 400 });
+        const [provider, medicare] = await Promise.all([
+          getNpiByNumber(npi),
+          getMedicarePhysicianData(npi),
+        ]);
+        result = { provider, medicare_services: medicare };
+        break;
+      }
+
+      case "get_hospital_profile": {
+        const ccn = args.ccn as string;
+        if (!ccn) return NextResponse.json({ error: "ccn required" }, { status: 400 });
+        result = await getHospitalProfile(ccn);
+        break;
+      }
+
+      case "get_facility_profile": {
+        const ccn = args.ccn as string;
+        if (!ccn) return NextResponse.json({ error: "ccn required" }, { status: 400 });
+        result = await getNursingHomeProfile(ccn);
+        break;
+      }
 
       case "list_cached_national_datasets":
         result = { cached_datasets: [] };

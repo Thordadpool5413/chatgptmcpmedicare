@@ -5,6 +5,10 @@ import {
   getHospitalOpportunity,
   getNursingHomeOpportunity,
   lookupNpi,
+  getNpiByNumber,
+  getMedicarePhysicianData,
+  getHospitalProfile,
+  getNursingHomeProfile,
 } from "@/lib/cms-direct";
 
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
@@ -13,7 +17,7 @@ const tools: Anthropic.Tool[] = [
   {
     name: "hospice_market_share",
     description:
-      "Get hospice provider market share rankings from Medicare PAC utilization data. Filter by US state abbreviation (e.g. TX, CA).",
+      "Get hospice provider market share rankings from Medicare PAC utilization data. Returns provider names, cities, beneficiary volumes, market share %, Medicare payments, avg patient age, and risk scores. Filter by US state abbreviation.",
     input_schema: {
       type: "object" as const,
       properties: {
@@ -25,7 +29,7 @@ const tools: Anthropic.Tool[] = [
   {
     name: "hospital_opportunity",
     description:
-      "Score hospitals by hospice referral opportunity using Medicare inpatient discharge data.",
+      "Score hospitals by hospice referral opportunity using Medicare inpatient discharge data. Returns hospital name, CCN, city, state, DRG codes/descriptions, discharge volumes, average payments, hospice DRG matches, and opportunity scores.",
     input_schema: {
       type: "object" as const,
       properties: {
@@ -37,7 +41,8 @@ const tools: Anthropic.Tool[] = [
   },
   {
     name: "nursing_home_opportunity",
-    description: "Score nursing homes / SNFs by hospice opportunity using CMS provider data.",
+    description:
+      "Score nursing homes / SNFs by hospice opportunity using CMS provider data. Returns facility name, CCN, address, ownership type, bed count, CMS 5-star ratings (overall, health inspection, staffing, RN staffing, QM), quality pressure, and opportunity scores.",
     input_schema: {
       type: "object" as const,
       properties: {
@@ -49,7 +54,8 @@ const tools: Anthropic.Tool[] = [
   },
   {
     name: "npi_lookup",
-    description: "Look up healthcare providers in the NPPES NPI registry.",
+    description:
+      "Look up healthcare providers in the NPPES NPI registry. Returns NPI number, name, credential, gender, specialty, license, all practice addresses, phone, fax, status, and enrollment dates.",
     input_schema: {
       type: "object" as const,
       properties: {
@@ -60,10 +66,46 @@ const tools: Anthropic.Tool[] = [
         city: { type: "string" },
         taxonomy_description: {
           type: "string",
-          description: "Specialty e.g. Hospice, Cardiology",
+          description: "Specialty e.g. Hospice, Cardiology, Family Practice",
         },
         limit: { type: "number", description: "Max results (default 20)" },
       },
+    },
+  },
+  {
+    name: "get_provider_profile",
+    description:
+      "Get a comprehensive profile for a specific provider by NPI number. Returns full NPPES record (all specialties, all addresses, all identifiers) plus Medicare Part B billing data (HCPCS codes, beneficiary counts, service counts, payments).",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        npi: { type: "string", description: "10-digit NPI number" },
+      },
+      required: ["npi"],
+    },
+  },
+  {
+    name: "get_hospital_profile",
+    description:
+      "Get a comprehensive profile for a specific hospital by CCN (CMS Certification Number). Returns all DRG data, discharge volumes, payment statistics, hospice-relevant DRG matches, and total opportunity score.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        ccn: { type: "string", description: "CMS Certification Number (CCN)" },
+      },
+      required: ["ccn"],
+    },
+  },
+  {
+    name: "get_facility_profile",
+    description:
+      "Get a comprehensive profile for a specific nursing home by CCN. Returns all CMS quality ratings (overall, health inspection, staffing, RN staffing, QM), bed counts, occupancy, ownership, and hospice opportunity analysis.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        ccn: { type: "string", description: "CMS Certification Number (CCN)" },
+      },
+      required: ["ccn"],
     },
   },
 ];
@@ -95,6 +137,21 @@ async function runTool(name: string, input: Record<string, unknown>): Promise<st
       case "npi_lookup":
         result = await lookupNpi(input as Parameters<typeof lookupNpi>[0]);
         break;
+      case "get_provider_profile": {
+        const npi = input.npi as string;
+        const [provider, medicare] = await Promise.all([
+          getNpiByNumber(npi),
+          getMedicarePhysicianData(npi),
+        ]);
+        result = { provider, medicare_services: medicare };
+        break;
+      }
+      case "get_hospital_profile":
+        result = await getHospitalProfile(input.ccn as string);
+        break;
+      case "get_facility_profile":
+        result = await getNursingHomeProfile(input.ccn as string);
+        break;
       default:
         return `Unknown tool: ${name}`;
     }
@@ -122,13 +179,23 @@ export async function POST(req: NextRequest) {
           const response = await client.messages.create({
             model: "claude-sonnet-4-6",
             max_tokens: 4096,
-            system:
-              "You are a Medicare market intelligence assistant. You help hospice organizations analyze market share, identify hospital and nursing home referral opportunities, and look up provider information using live CMS public data. Be concise and actionable. When presenting data, summarize the key findings rather than listing every row.",
+            system: `You are a Medicare market intelligence assistant for hospice organizations. You have access to live CMS public data and can:
+- Analyze hospice market share by provider, city, and state
+- Score hospitals and nursing homes for hospice referral opportunity
+- Look up any healthcare provider by NPI number
+- Pull full provider profiles with Medicare billing history
+- Get complete hospital DRG breakdowns and nursing home quality ratings
+
+When presenting data, be specific and actionable:
+- Lead with the most important finding (top provider, highest score, etc.)
+- Include key metrics: names, scores, volumes, payments
+- For provider lookups, summarize specialties, location, and Medicare activity
+- Suggest follow-up actions (e.g., "View the full profile at /provider/[NPI]")
+- Use bullet points and tables in markdown for clarity`,
             messages: currentMessages,
             tools,
           });
 
-          // Stream text blocks
           for (const block of response.content) {
             if (block.type === "text") {
               send(block.text);
