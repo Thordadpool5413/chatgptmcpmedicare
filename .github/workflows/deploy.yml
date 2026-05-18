@@ -1,0 +1,45 @@
+name: Deploy to Hostinger
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: 145.79.4.132
+          port: 65002
+          username: u510071480
+          password: ${{ secrets.SSH_PASSWORD }}
+          command_timeout: 20m
+          script: |
+            set -e
+
+            # Clone repo if not present, otherwise pull
+            if [ ! -d "$HOME/chatgptmcpmedicare" ]; then
+              git clone https://github.com/Thordadpool5413/chatgptmcpmedicare.git "$HOME/chatgptmcpmedicare"
+            fi
+
+            cd "$HOME/chatgptmcpmedicare"
+            git fetch origin main
+            git checkout main
+            git pull origin main
+
+            # Install dependencies + auto-build (postinstall runs next build)
+            cd web
+            npm install
+
+            # Restart the app process
+            pkill -f "node server.js" 2>/dev/null || true
+            pkill -f "node index.js" 2>/dev/null || true
+            sleep 2
+            cd "$HOME/chatgptmcpmedicare"
+            PORT=${PORT:-3000} nohup node server.js > "$HOME/app.log" 2>&1 &
+            echo "App started on PID $!"
+            sleep 3
+            curl -sf http://127.0.0.1:${PORT:-3000} > /dev/null && echo "Health check passed" || echo "Warning: health check failed - check app.log"
