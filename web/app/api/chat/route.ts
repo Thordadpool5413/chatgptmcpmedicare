@@ -5,6 +5,7 @@ import {
   getHospiceProviderProfile,
   getHospitalOpportunity,
   getNursingHomeOpportunity,
+  getHhaOpportunity,
   lookupNpi,
   getNpiByNumber,
   getMedicarePhysicianData,
@@ -44,6 +45,19 @@ const tools: Anthropic.Tool[] = [
     name: "hospital_opportunity",
     description:
       "Score hospitals by hospice referral opportunity using Medicare inpatient discharge data. Returns hospital name, CCN, city, state, DRG codes/descriptions, discharge volumes, average payments, hospice DRG matches, and opportunity scores.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        state: { type: "string", description: "2-letter US state abbreviation (optional)" },
+        city: { type: "string", description: "City name (optional)" },
+        max_rows: { type: "number", description: "Maximum rows to return (default 50)" },
+      },
+    },
+  },
+  {
+    name: "home_health_opportunity",
+    description:
+      "Score Home Health Agencies (HHAs) by hospice referral opportunity using Medicare HHA utilization data. Returns agency name, CCN, city, state, beneficiary counts, episode counts, Medicare payments, avg patient age, risk scores, and condition mix (CHF, cancer, COPD, Alzheimer's).",
     input_schema: {
       type: "object" as const,
       properties: {
@@ -137,6 +151,13 @@ async function runTool(name: string, input: Record<string, unknown>): Promise<st
         break;
       case "get_hospice_provider_profile":
         result = await getHospiceProviderProfile(input.npi as string);
+        break;
+      case "home_health_opportunity":
+        result = await getHhaOpportunity(
+          input.state as string | undefined,
+          input.city as string | undefined,
+          (input.max_rows as number | undefined) ?? 50,
+        );
         break;
       case "hospital_opportunity":
         result = await getHospitalOpportunity(

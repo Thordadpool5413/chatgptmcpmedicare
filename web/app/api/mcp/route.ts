@@ -4,6 +4,8 @@ import {
   getHospiceProviderProfile,
   getHospitalOpportunity,
   getNursingHomeOpportunity,
+  getHhaOpportunity,
+  getSnfUtilization,
   lookupNpi,
   getNpiByNumber,
   getMedicarePhysicianData,
@@ -80,6 +82,21 @@ export async function POST(req: NextRequest) {
         const ccn = args.ccn as string;
         if (!ccn) return NextResponse.json({ error: "ccn required" }, { status: 400 });
         result = await getNursingHomeProfile(ccn);
+        break;
+      }
+
+      case "hha_opportunity":
+        result = await getHhaOpportunity(
+          args.state as string | undefined,
+          args.city as string | undefined,
+          (args.max_rows as number | undefined) ?? 200,
+        );
+        break;
+
+      case "get_snf_utilization": {
+        const ccn = args.ccn as string;
+        if (!ccn) return NextResponse.json({ error: "ccn required" }, { status: 400 });
+        result = await getSnfUtilization(ccn);
         break;
       }
 

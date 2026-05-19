@@ -5,8 +5,14 @@ const PROVIDER_DATA_API = "https://data.cms.gov/provider-data/api/1";
 const NPPES_API = "https://npiregistry.cms.hhs.gov/api/";
 
 const HOSPICE_UUID = "4e73f1b5-82cb-4682-8ad2-28493f0b6840";
+const HOSPICE_ENROLLMENT_UUID = "25704213-e833-4b8b-9dbc-58dd17149209";
 const HOSPITAL_UUID = "690ddc6c-2767-4618-b277-420ffb2bf27c";
+const HOSPITAL_INPATIENT_UUID = "ee6fb1a5-39b9-46b3-a980-a7284551a732";
 const NURSING_HOME_ID = "4pq5-n9py";
+const SNF_UTILIZATION_UUID = "eaed338b-847e-41b1-a4d3-a206f40dc72b";
+const HHA_UTILIZATION_UUID = "43ef03ce-2b60-40a8-958e-146195b5fec7";
+const HOSPICE_PROVIDER_DATA_ID = "yc9t-dgbk";
+const HOSPITAL_GENERAL_ID = "xubh-q36u";
 // Medicare Part B - Physicians & Other Practitioners by Provider and Service
 const PHYSICIAN_UUID = "9552459c-79f3-4c9b-9683-5af8f10ea71d";
 
@@ -22,6 +28,13 @@ export function currency(v: unknown): string {
   return new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 }).format(n);
 }
 
+// Convert CMS condition value to display percentage. CMS stores some as 0-1 decimals, some as 0-100 whole numbers.
+export function toPct(v: unknown): number {
+  const n = num(v);
+  if (n === 0) return 0;
+  return n > 1 ? n : n * 100;
+}
+
 function findCol(row: Record<string, unknown>, candidates: string[]): string | null {
   const keys = Object.keys(row);
   for (const c of candidates) {
@@ -29,6 +42,20 @@ function findCol(row: Record<string, unknown>, candidates: string[]): string | n
     if (found) return found;
   }
   return null;
+}
+
+// Normalize CMS DKAN API responses — handles both plain array and {data:[]} / {results:[]} wrappers
+async function fetchDkan(url: string, opts?: RequestInit): Promise<Record<string, unknown>[]> {
+  const res = await fetch(url, { signal: AbortSignal.timeout(30_000), ...opts });
+  if (!res.ok) throw new Error(`CMS API ${res.status} — ${url.split("?")[0].split("/").slice(-3).join("/")}`);
+  const raw: unknown = await res.json();
+  if (Array.isArray(raw)) return raw as Record<string, unknown>[];
+  if (raw && typeof raw === "object") {
+    const obj = raw as Record<string, unknown>;
+    const arr = obj.data ?? obj.results ?? obj.rows ?? [];
+    if (Array.isArray(arr)) return arr as Record<string, unknown>[];
+  }
+  return [];
 }
 
 export const HOSPICE_DRG_TERMS = [
@@ -94,14 +121,10 @@ export interface HospiceResult {
 export async function getHospiceMarketShare(state?: string, maxRows = 200, city?: string): Promise<HospiceResult> {
   const params = new URLSearchParams({ size: "2000" });
   if (state) params.set("filter[Rndrng_Prvdr_State_Abrvtn]", state);
-  if (city) params.set("filter[Rndrng_Prvdr_City]", city.toUpperCase());
+  if (city) params.set("filter[Rndrng_Prvdr_City]", city);
 
-  const res = await fetch(`${CMS_DATA_API}/dataset/${HOSPICE_UUID}/data?${params}`, {
-    signal: AbortSignal.timeout(30_000),
-  });
-  if (!res.ok) throw new Error(`CMS API error ${res.status}`);
-  const data = (await res.json()) as Record<string, unknown>[];
-  if (!data.length) return { rows: [], provider_column_used: "", volume_column_used: "", market_column_used: "", total_volume: 0, market_totals: {}, interpretation_note: "No data found." };
+  const data = await fetchDkan(`${CMS_DATA_API}/dataset/${HOSPICE_UUID}/data?${params}`);
+  if (!data.length) return { rows: [], provider_column_used: "", volume_column_used: "", market_column_used: "", total_volume: 0, market_totals: {}, interpretation_note: "No data found. Try selecting a specific state." };
 
   const sample = data[0];
   const provCol = findCol(sample, ["Rndrng_Prvdr_Org_Name", "ProviderName", "Provider"]) ?? Object.keys(sample)[0];
@@ -151,11 +174,7 @@ export async function getHospiceProviderProfile(npi: string): Promise<HospicePro
   const fetchRow = async (): Promise<HospiceRow | null> => {
     try {
       const params = new URLSearchParams({ "filter[Rndrng_Prvdr_NPI]": npi, size: "10" });
-      const res = await fetch(`${CMS_DATA_API}/dataset/${HOSPICE_UUID}/data?${params}`, {
-        signal: AbortSignal.timeout(30_000),
-      });
-      if (!res.ok) return null;
-      const data = (await res.json()) as Record<string, unknown>[];
+      const data = await fetchDkan(`${CMS_DATA_API}/dataset/${HOSPICE_UUID}/data?${params}`);
       if (!data.length) return null;
       const r = data[0];
       return {
@@ -182,11 +201,7 @@ export async function getHospiceProviderProfile(npi: string): Promise<HospicePro
         "filter[Rndrng_Prvdr_State_Abrvtn]": String(row.Rndrng_Prvdr_State_Abrvtn),
         size: "200",
       });
-      const res = await fetch(`${CMS_DATA_API}/dataset/${HOSPICE_UUID}/data?${params}`, {
-        signal: AbortSignal.timeout(30_000),
-      });
-      if (!res.ok) return [];
-      const data = (await res.json()) as Record<string, unknown>[];
+      const data = await fetchDkan(`${CMS_DATA_API}/dataset/${HOSPICE_UUID}/data?${params}`);
       const totalVol = data.reduce((s, r) => s + num(r.Tot_Benes), 0);
       const peers: HospiceRow[] = data.map((r) => ({
         ...r,
@@ -243,13 +258,9 @@ export async function getHospitalOpportunity(
 ): Promise<{ rows: HospitalRow[]; total_records: number; interpretation_note: string }> {
   const params = new URLSearchParams({ size: "2000" });
   if (state) params.set("filter[Rndrng_Prvdr_State_Abrvtn]", state);
-  if (city) params.set("filter[Rndrng_Prvdr_City]", city.toUpperCase());
+  if (city) params.set("filter[Rndrng_Prvdr_City]", city);
 
-  const res = await fetch(`${CMS_DATA_API}/dataset/${HOSPITAL_UUID}/data?${params}`, {
-    signal: AbortSignal.timeout(30_000),
-  });
-  if (!res.ok) throw new Error(`CMS API error ${res.status}`);
-  const data = (await res.json()) as Record<string, unknown>[];
+  const data = await fetchDkan(`${CMS_DATA_API}/dataset/${HOSPITAL_UUID}/data?${params}`);
 
   const rows: HospitalRow[] = data.map((row) => {
     const drg = String(row.DRG_Desc ?? "").toLowerCase();
@@ -299,11 +310,12 @@ export interface HospitalProfile {
 
 export async function getHospitalProfile(ccn: string): Promise<HospitalProfile | null> {
   const params = new URLSearchParams({ "filter[Rndrng_Prvdr_CCN]": ccn, size: "1000" });
-  const res = await fetch(`${CMS_DATA_API}/dataset/${HOSPITAL_UUID}/data?${params}`, {
-    signal: AbortSignal.timeout(30_000),
-  });
-  if (!res.ok) return null;
-  const data = (await res.json()) as Record<string, unknown>[];
+  let data: Record<string, unknown>[];
+  try {
+    data = await fetchDkan(`${CMS_DATA_API}/dataset/${HOSPITAL_UUID}/data?${params}`);
+  } catch {
+    return null;
+  }
   if (!data.length) return null;
 
   const first = data[0];
@@ -579,13 +591,165 @@ export interface PhysicianServiceRow {
 export async function getMedicarePhysicianData(npi: string): Promise<PhysicianServiceRow[]> {
   const params = new URLSearchParams({ "filter[Rndrng_NPI]": npi, size: "500" });
   try {
-    const res = await fetch(`${CMS_DATA_API}/dataset/${PHYSICIAN_UUID}/data?${params}`, {
-      signal: AbortSignal.timeout(30_000),
-    });
-    if (!res.ok) return [];
-    const data = (await res.json()) as Record<string, unknown>[];
-    return (data ?? []) as PhysicianServiceRow[];
+    const data = await fetchDkan(`${CMS_DATA_API}/dataset/${PHYSICIAN_UUID}/data?${params}`);
+    return data as PhysicianServiceRow[];
   } catch {
     return [];
   }
+}
+
+// ─── Home Health Agency (HHA) Opportunity ────────────────────────────────────
+
+export interface HhaRow {
+  Rndrng_Prvdr_CCN?: string;
+  Rndrng_Prvdr_Org_Name?: string;
+  Rndrng_Prvdr_City?: string;
+  Rndrng_Prvdr_State_Abrvtn?: string;
+  Rndrng_Prvdr_Zip_Cd?: string;
+  Rndrng_Prvdr_RUCA_Desc?: string;
+  Tot_Epsdss?: number;
+  Tot_Benes?: number;
+  Tot_Mdcr_Pymt_Amt?: number;
+  Bene_Avg_Age?: number;
+  Bene_Avg_Risk_Scre?: number;
+  Bene_Feml_Cnt?: number;
+  Bene_Male_Cnt?: number;
+  Bene_Dual_Cnt?: number;
+  Bene_CC_CHF_Pct?: number;
+  Bene_CC_COPD_Pct?: number;
+  Bene_CC_Alzhmr_Pct?: number;
+  Bene_CC_CancerX_Pct?: number;
+  Bene_CC_Diab_Pct?: number;
+  Bene_CC_Strok_TIA_Pct?: number;
+  Bene_CC_Hypert_Pct?: number;
+  Bene_CC_Isch_Heart_Pct?: number;
+  Bene_CC_CKD_Pct?: number;
+  _opportunity_score: number;
+  [key: string]: unknown;
+}
+
+export async function getHhaOpportunity(
+  state?: string, city?: string, maxRows = 200,
+): Promise<{ rows: HhaRow[]; total_records: number; interpretation_note: string }> {
+  const params = new URLSearchParams({ size: "2000" });
+  if (state) params.set("filter[Rndrng_Prvdr_State_Abrvtn]", state);
+  if (city) params.set("filter[Rndrng_Prvdr_City]", city);
+
+  const data = await fetchDkan(`${CMS_DATA_API}/dataset/${HHA_UTILIZATION_UUID}/data?${params}`);
+
+  const rows: HhaRow[] = data.map((row) => {
+    const benes = num(row.Tot_Benes);
+    const payment = num(row.Tot_Mdcr_Pymt_Amt);
+    const riskScore = num(row.Bene_Avg_Risk_Scre) || 1;
+    const score = benes * riskScore + payment / 50000;
+    return {
+      ...row,
+      _opportunity_score: parseFloat(score.toFixed(2)),
+    } as HhaRow;
+  });
+
+  rows.sort((a, b) => b._opportunity_score - a._opportunity_score);
+
+  return {
+    rows: rows.slice(0, maxRows),
+    total_records: data.length,
+    interpretation_note: "Score = beneficiaries × risk score + payment weight. Higher score = stronger HHA referral opportunity.",
+  };
+}
+
+// ─── SNF Utilization (Medicare payments for nursing homes) ───────────────────
+
+export interface SnfUtilizationRow {
+  Rndrng_Prvdr_CCN?: string;
+  Rndrng_Prvdr_Org_Name?: string;
+  Rndrng_Prvdr_City?: string;
+  Rndrng_Prvdr_State_Abrvtn?: string;
+  Tot_Epsdss?: number;
+  Tot_Benes?: number;
+  Tot_Mdcr_Pymt_Amt?: number;
+  Bene_Avg_Age?: number;
+  Bene_Avg_Risk_Scre?: number;
+  Bene_Feml_Cnt?: number;
+  Bene_Male_Cnt?: number;
+  Bene_Dual_Cnt?: number;
+  Bene_CC_CHF_Pct?: number;
+  Bene_CC_COPD_Pct?: number;
+  Bene_CC_Alzhmr_Pct?: number;
+  Bene_CC_CancerX_Pct?: number;
+  [key: string]: unknown;
+}
+
+export async function getSnfUtilization(ccn: string): Promise<SnfUtilizationRow | null> {
+  try {
+    const params = new URLSearchParams({ "filter[Rndrng_Prvdr_CCN]": ccn, size: "1" });
+    const data = await fetchDkan(`${CMS_DATA_API}/dataset/${SNF_UTILIZATION_UUID}/data?${params}`);
+    return data.length ? (data[0] as SnfUtilizationRow) : null;
+  } catch {
+    return null;
+  }
+}
+
+// ─── Hospice Provider Enrollment Info ────────────────────────────────────────
+
+export interface HospiceEnrollmentRow {
+  NPI?: string;
+  Organization_Name?: string;
+  Address_Line_1?: string;
+  Address_Line_2?: string;
+  City?: string;
+  State?: string;
+  Zip_Code?: string;
+  Phone_Number?: string;
+  CCN?: string;
+  Enrollment_Date?: string;
+  PAC_ID?: string;
+  [key: string]: unknown;
+}
+
+export async function getHospiceEnrollment(npi: string): Promise<HospiceEnrollmentRow | null> {
+  try {
+    const params = new URLSearchParams({ "filter[NPI]": npi, size: "1" });
+    const data = await fetchDkan(`${CMS_DATA_API}/dataset/${HOSPICE_ENROLLMENT_UUID}/data?${params}`);
+    return data.length ? (data[0] as HospiceEnrollmentRow) : null;
+  } catch {
+    return null;
+  }
+}
+
+// ─── API Health Check ─────────────────────────────────────────────────────────
+
+export async function checkApiHealth(): Promise<Record<string, { ok: boolean; rows?: number; cols?: string[]; error?: string }>> {
+  async function probe(label: string, url: string, post?: object) {
+    try {
+      const res = post
+        ? await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(post), signal: AbortSignal.timeout(15_000) })
+        : await fetch(url, { signal: AbortSignal.timeout(15_000) });
+      if (!res.ok) return { ok: false, error: `HTTP ${res.status}` };
+      const raw: unknown = await res.json();
+      const arrRaw = Array.isArray(raw) ? raw : ((raw as Record<string, unknown>)?.data ?? (raw as Record<string, unknown>)?.results ?? []);
+      const arr: unknown[] = Array.isArray(arrRaw) ? arrRaw : [];
+      const rows = arr.length;
+      const cols = rows > 0 ? Object.keys(arr[0] as Record<string, unknown>).slice(0, 8) : [];
+      return { ok: true, rows, cols };
+    } catch (e) {
+      return { ok: false, error: String(e) };
+    }
+  }
+
+  const results = await Promise.all([
+    probe("Hospice Utilization", `${CMS_DATA_API}/dataset/${HOSPICE_UUID}/data?size=1`),
+    probe("Hospice Enrollment", `${CMS_DATA_API}/dataset/${HOSPICE_ENROLLMENT_UUID}/data?size=1`),
+    probe("Hospital DRG", `${CMS_DATA_API}/dataset/${HOSPITAL_UUID}/data?size=1`),
+    probe("Hospital Inpatient", `${CMS_DATA_API}/dataset/${HOSPITAL_INPATIENT_UUID}/data?size=1`),
+    probe("Medicare Part B", `${CMS_DATA_API}/dataset/${PHYSICIAN_UUID}/data?size=1`),
+    probe("SNF Utilization", `${CMS_DATA_API}/dataset/${SNF_UTILIZATION_UUID}/data?size=1`),
+    probe("HHA Utilization", `${CMS_DATA_API}/dataset/${HHA_UTILIZATION_UUID}/data?size=1`),
+    probe("Nursing Home PDC", `${PROVIDER_DATA_API}/datastore/query/${NURSING_HOME_ID}/0`, { conditions: [], limit: 1, offset: 0 }),
+    probe("NPPES API", `${NPPES_API}?version=2.1&number=1023078949`),
+  ]);
+
+  const labels = ["Hospice Utilization", "Hospice Enrollment", "Hospital DRG", "Hospital Inpatient",
+    "Medicare Part B", "SNF Utilization", "HHA Utilization", "Nursing Home PDC", "NPPES API"];
+
+  return Object.fromEntries(labels.map((l, i) => [l, results[i]]));
 }

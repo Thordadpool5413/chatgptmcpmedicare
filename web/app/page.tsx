@@ -1,7 +1,7 @@
 import Link from "next/link";
 import {
   BarChart3, Building2, BedDouble, Search, Database, MessageSquare,
-  User, Hospital, Home, ArrowRight, Heart,
+  User, Hospital, Home, ArrowRight, Heart, Stethoscope, Activity,
 } from "lucide-react";
 import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -32,6 +32,14 @@ const TOOLS = [
     icon: BedDouble,
     features: ["5-star ratings", "Bed capacity", "Quality pressure", "Opportunity score"],
     profilePath: "/facility/[ccn]",
+  },
+  {
+    href: "/home-health",
+    title: "Home Health Agency",
+    description:
+      "Score Home Health Agencies by hospice referral opportunity using Medicare HHA utilization data. Beneficiary volume, Medicare payments, condition mix, risk scores.",
+    icon: Stethoscope,
+    features: ["HHA utilization", "Condition mix", "Risk scores", "Opportunity score"],
   },
   {
     href: "/npi-lookup",
@@ -180,11 +188,19 @@ export default function DashboardPage() {
           <p className="font-medium mb-2">Data Sources</p>
           <ul className="space-y-1 text-[hsl(var(--muted-foreground))]">
             <li>· Medicare PAC Utilization — Hospice (CMS)</li>
+            <li>· Medicare PAC Utilization — Home Health Agency (CMS)</li>
+            <li>· Medicare PAC Utilization — Skilled Nursing Facility (CMS)</li>
             <li>· Medicare Inpatient Hospitals by Provider &amp; Service (CMS)</li>
             <li>· Nursing Home Compare / Provider Data Catalog (CMS)</li>
             <li>· NPPES NPI Registry (CMS)</li>
             <li>· Medicare Part B Physician &amp; Other Practitioners (CMS)</li>
+            <li>· Hospice Provider Enrollments (CMS PECOS)</li>
           </ul>
+          <div className="mt-3">
+            <Link href="/status" className="inline-flex items-center gap-1.5 text-xs text-[hsl(var(--primary))] hover:underline">
+              <Activity className="h-3 w-3" /> Check API Health Status
+            </Link>
+          </div>
         </div>
         <Card>
           <CardHeader>

@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { getHospiceProviderProfile, num, currency } from "@/lib/cms-direct";
+import { getHospiceProviderProfile, num, currency, toPct } from "@/lib/cms-direct";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
@@ -55,18 +55,18 @@ export default async function HospiceProfilePage({
   const dualPct = totalBenes > 0 ? (dualCnt / totalBenes) * 100 : 0;
 
   const CONDITIONS = [
-    { label: "Cancer", pct: num(row?.Bene_CC_CancerX_Pct) * 100 },
-    { label: "Heart Failure (CHF)", pct: num(row?.Bene_CC_CHF_Pct) * 100 },
-    { label: "COPD", pct: num(row?.Bene_CC_COPD_Pct) * 100 },
-    { label: "Alzheimer's / Dementia", pct: num(row?.Bene_CC_Alzhmr_Pct) * 100 },
-    { label: "Diabetes", pct: num(row?.Bene_CC_Diab_Pct) * 100 },
-    { label: "Stroke / TIA", pct: num(row?.Bene_CC_Strok_TIA_Pct) * 100 },
-    { label: "Hypertension", pct: num(row?.Bene_CC_Hypert_Pct) * 100 },
-    { label: "Ischemic Heart Disease", pct: num(row?.Bene_CC_Isch_Heart_Pct) * 100 },
-    { label: "Chronic Kidney Disease", pct: num(row?.Bene_CC_CKD_Pct) * 100 },
-    { label: "Depression", pct: num(row?.Bene_CC_Deprssn_Pct) * 100 },
-    { label: "Osteoporosis", pct: num(row?.Bene_CC_Osteoprs_Pct) * 100 },
-    { label: "RA / OA", pct: num(row?.Bene_CC_RA_OA_Pct) * 100 },
+    { label: "Cancer", pct: toPct(row?.Bene_CC_CancerX_Pct) },
+    { label: "Heart Failure (CHF)", pct: toPct(row?.Bene_CC_CHF_Pct) },
+    { label: "COPD", pct: toPct(row?.Bene_CC_COPD_Pct) },
+    { label: "Alzheimer's / Dementia", pct: toPct(row?.Bene_CC_Alzhmr_Pct) },
+    { label: "Diabetes", pct: toPct(row?.Bene_CC_Diab_Pct) },
+    { label: "Stroke / TIA", pct: toPct(row?.Bene_CC_Strok_TIA_Pct) },
+    { label: "Hypertension", pct: toPct(row?.Bene_CC_Hypert_Pct) },
+    { label: "Ischemic Heart Disease", pct: toPct(row?.Bene_CC_Isch_Heart_Pct) },
+    { label: "Chronic Kidney Disease", pct: toPct(row?.Bene_CC_CKD_Pct) },
+    { label: "Depression", pct: toPct(row?.Bene_CC_Deprssn_Pct) },
+    { label: "Osteoporosis", pct: toPct(row?.Bene_CC_Osteoprs_Pct) },
+    { label: "RA / OA", pct: toPct(row?.Bene_CC_RA_OA_Pct) },
   ].filter((c) => c.pct > 0).sort((a, b) => b.pct - a.pct);
 
   const city = String(row?.Rndrng_Prvdr_City ?? provider?.addresses?.[0]?.city ?? "");
