@@ -50,7 +50,10 @@ export default function ChatPage() {
         }),
       });
 
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      if (!res.ok) {
+        const body = await res.text().catch(() => "");
+        throw new Error(`Server error ${res.status}: ${body.slice(0, 300)}`);
+      }
 
       const reader = res.body!.getReader();
       const decoder = new TextDecoder();

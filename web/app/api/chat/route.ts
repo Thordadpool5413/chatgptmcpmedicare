@@ -209,6 +209,18 @@ async function runTool(name: string, input: Record<string, unknown>): Promise<st
   }
 }
 
+import { NextResponse } from "next/server";
+
+export async function GET() {
+  const key = process.env.ANTHROPIC_API_KEY;
+  return NextResponse.json({
+    ok: !!key,
+    key_set: !!key,
+    key_preview: key ? `${key.slice(0, 10)}…` : null,
+    note: key ? "ANTHROPIC_API_KEY is set. Chat should work." : "ANTHROPIC_API_KEY is NOT set in this process environment. Add it in Hostinger and trigger a redeploy.",
+  });
+}
+
 export async function POST(req: NextRequest) {
   const { messages } = (await req.json()) as {
     messages: Anthropic.MessageParam[];

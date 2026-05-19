@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
     git reset --hard origin/main && \
     cd ${repoDir}/web && \
     npm install && \
-    pm2 restart all 2>/dev/null || true
+    pm2 restart all --update-env 2>/dev/null || pm2 start ${repoDir}/web/server.js --name web --update-env
   `;
 
   exec(script, { timeout: 600_000 }, (err, stdout, stderr) => {
