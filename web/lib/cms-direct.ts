@@ -50,6 +50,8 @@ export interface HospiceRow {
   Rndrng_Prvdr_City?: string;
   Rndrng_Prvdr_State_Abrvtn?: string;
   Rndrng_Prvdr_Zip_Cd?: string;
+  Rndrng_Prvdr_RUCA?: string;
+  Rndrng_Prvdr_RUCA_Desc?: string;
   Tot_Benes?: number;
   Tot_Mdcr_Pymt_Amt?: number;
   Bene_Avg_Age?: number;
@@ -61,7 +63,22 @@ export interface HospiceRow {
   Bene_CC_COPD_Pct?: number;
   Bene_CC_Alzhmr_Pct?: number;
   Bene_CC_CancerX_Pct?: number;
+  Bene_CC_Diab_Pct?: number;
+  Bene_CC_Strok_TIA_Pct?: number;
+  Bene_CC_Hypert_Pct?: number;
+  Bene_CC_Isch_Heart_Pct?: number;
+  Bene_CC_Osteoprs_Pct?: number;
+  Bene_CC_RA_OA_Pct?: number;
+  Bene_CC_Deprssn_Pct?: number;
+  Bene_CC_CKD_Pct?: number;
   [key: string]: unknown;
+}
+
+export interface HospiceProviderProfile {
+  npi: string;
+  row: HospiceRow | null;
+  provider: NpiProvider | null;
+  market_peers: HospiceRow[];
 }
 
 export interface HospiceResult {
@@ -74,9 +91,10 @@ export interface HospiceResult {
   interpretation_note: string;
 }
 
-export async function getHospiceMarketShare(state?: string, maxRows = 200): Promise<HospiceResult> {
+export async function getHospiceMarketShare(state?: string, maxRows = 200, city?: string): Promise<HospiceResult> {
   const params = new URLSearchParams({ size: "2000" });
   if (state) params.set("filter[Rndrng_Prvdr_State_Abrvtn]", state);
+  if (city) params.set("filter[Rndrng_Prvdr_City]", city.toUpperCase());
 
   const res = await fetch(`${CMS_DATA_API}/dataset/${HOSPICE_UUID}/data?${params}`, {
     signal: AbortSignal.timeout(30_000),
@@ -125,6 +143,79 @@ export async function getHospiceMarketShare(state?: string, maxRows = 200): Prom
     market_totals: mktTotals,
     interpretation_note: "Market share = provider beneficiary volume ÷ market (city) total. Source: Medicare PAC Utilization Hospice.",
   };
+}
+
+// ─── Single Hospice Provider Profile ─────────────────────────────────────────
+
+export async function getHospiceProviderProfile(npi: string): Promise<HospiceProviderProfile> {
+  const fetchRow = async (): Promise<HospiceRow | null> => {
+    try {
+      const params = new URLSearchParams({ "filter[Rndrng_Prvdr_NPI]": npi, size: "10" });
+      const res = await fetch(`${CMS_DATA_API}/dataset/${HOSPICE_UUID}/data?${params}`, {
+        signal: AbortSignal.timeout(30_000),
+      });
+      if (!res.ok) return null;
+      const data = (await res.json()) as Record<string, unknown>[];
+      if (!data.length) return null;
+      const r = data[0];
+      return {
+        ...r,
+        _provider_name: String(r.Rndrng_Prvdr_Org_Name ?? ""),
+        _market: String(r.Rndrng_Prvdr_City ?? ""),
+        _market_volume: num(r.Tot_Benes),
+        _market_total_volume: 0,
+        _market_share_pct: 0,
+        _rank: 0,
+      } as HospiceRow;
+    } catch {
+      return null;
+    }
+  };
+
+  const row = await fetchRow();
+
+  const fetchPeers = async (): Promise<HospiceRow[]> => {
+    if (!row?.Rndrng_Prvdr_City || !row?.Rndrng_Prvdr_State_Abrvtn) return [];
+    try {
+      const params = new URLSearchParams({
+        "filter[Rndrng_Prvdr_City]": String(row.Rndrng_Prvdr_City),
+        "filter[Rndrng_Prvdr_State_Abrvtn]": String(row.Rndrng_Prvdr_State_Abrvtn),
+        size: "200",
+      });
+      const res = await fetch(`${CMS_DATA_API}/dataset/${HOSPICE_UUID}/data?${params}`, {
+        signal: AbortSignal.timeout(30_000),
+      });
+      if (!res.ok) return [];
+      const data = (await res.json()) as Record<string, unknown>[];
+      const totalVol = data.reduce((s, r) => s + num(r.Tot_Benes), 0);
+      const peers: HospiceRow[] = data.map((r) => ({
+        ...r,
+        _provider_name: String(r.Rndrng_Prvdr_Org_Name ?? ""),
+        _market: String(r.Rndrng_Prvdr_City ?? ""),
+        _market_volume: num(r.Tot_Benes),
+        _market_total_volume: totalVol,
+        _market_share_pct: parseFloat(((num(r.Tot_Benes) / (totalVol || 1)) * 100).toFixed(2)),
+        _rank: 0,
+      } as HospiceRow));
+      peers.sort((a, b) => b._market_volume - a._market_volume);
+      peers.forEach((p, i) => { p._rank = i + 1; });
+      const myTotal = peers.reduce((s, p) => s + p._market_volume, 0);
+      peers.forEach((p) => {
+        p._market_total_volume = myTotal;
+        p._market_share_pct = parseFloat(((p._market_volume / (myTotal || 1)) * 100).toFixed(2));
+      });
+      if (row) {
+        row._market_total_volume = myTotal;
+        row._market_share_pct = parseFloat(((row._market_volume / (myTotal || 1)) * 100).toFixed(2));
+      }
+      return peers;
+    } catch {
+      return [];
+    }
+  };
+
+  const [provider, peers] = await Promise.all([getNpiByNumber(npi), fetchPeers()]);
+  return { npi, row, provider, market_peers: peers };
 }
 
 // ─── Hospital Opportunity ─────────────────────────────────────────────────────

@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import {
   getHospiceMarketShare,
+  getHospiceProviderProfile,
   getHospitalOpportunity,
   getNursingHomeOpportunity,
   lookupNpi,
@@ -17,13 +18,26 @@ const tools: Anthropic.Tool[] = [
   {
     name: "hospice_market_share",
     description:
-      "Get hospice provider market share rankings from Medicare PAC utilization data. Returns provider names, cities, beneficiary volumes, market share %, Medicare payments, avg patient age, and risk scores. Filter by US state abbreviation.",
+      "Get hospice provider market share rankings from Medicare PAC utilization data. Returns provider names, NPIs, cities, beneficiary volumes, market share %, Medicare payments, avg patient age, risk scores, dual-eligible %, and chronic condition percentages (cancer, CHF, COPD, Alzheimer's). Filter by US state and/or city.",
     input_schema: {
       type: "object" as const,
       properties: {
         state: { type: "string", description: "2-letter US state abbreviation (optional)" },
+        city: { type: "string", description: "City name (optional)" },
         max_rows: { type: "number", description: "Maximum rows to return (default 50)" },
       },
+    },
+  },
+  {
+    name: "get_hospice_provider_profile",
+    description:
+      "Get a comprehensive profile for a specific hospice provider by NPI number. Returns full Medicare PAC hospice billing data (beneficiary volume, Medicare payments, per-beneficiary payment), complete patient demographics (age, gender, dual-eligible %), full chronic condition mix (cancer %, CHF %, COPD %, Alzheimer's %, diabetes %, stroke %, hypertension %, ischemic heart disease %, CKD %, depression %), geographic market analysis with market share and all competitor hospice providers in the same city, plus NPPES registration details.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        npi: { type: "string", description: "10-digit NPI number of the hospice provider" },
+      },
+      required: ["npi"],
     },
   },
   {
@@ -118,7 +132,11 @@ async function runTool(name: string, input: Record<string, unknown>): Promise<st
         result = await getHospiceMarketShare(
           input.state as string | undefined,
           (input.max_rows as number | undefined) ?? 50,
+          input.city as string | undefined,
         );
+        break;
+      case "get_hospice_provider_profile":
+        result = await getHospiceProviderProfile(input.npi as string);
         break;
       case "hospital_opportunity":
         result = await getHospitalOpportunity(

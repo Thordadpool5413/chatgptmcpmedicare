@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import {
   getHospiceMarketShare,
+  getHospiceProviderProfile,
   getHospitalOpportunity,
   getNursingHomeOpportunity,
   lookupNpi,
@@ -26,8 +27,16 @@ export async function POST(req: NextRequest) {
         result = await getHospiceMarketShare(
           args.state as string | undefined,
           (args.max_rows as number | undefined) ?? 200,
+          args.city as string | undefined,
         );
         break;
+
+      case "get_hospice_provider_profile": {
+        const npi = args.npi as string;
+        if (!npi) return NextResponse.json({ error: "npi required" }, { status: 400 });
+        result = await getHospiceProviderProfile(npi);
+        break;
+      }
 
       case "hospital_hospice_opportunity":
         result = await getHospitalOpportunity(

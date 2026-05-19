@@ -1,7 +1,7 @@
 import Link from "next/link";
 import {
   BarChart3, Building2, BedDouble, Search, Database, MessageSquare,
-  User, Hospital, Home, ArrowRight,
+  User, Hospital, Home, ArrowRight, Heart,
 } from "lucide-react";
 import { Card, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 
@@ -10,9 +10,10 @@ const TOOLS = [
     href: "/hospice-market",
     title: "Hospice Market Share",
     description:
-      "Ranked hospice providers by beneficiary volume, market share %, Medicare payments, avg patient age, and risk scores. Filter by state.",
+      "Ranked hospice providers by beneficiary volume, market share %, Medicare payments, avg patient age, risk scores, dual-eligible %, and patient condition mix. Filter by state and city. Click any provider for full profile.",
     icon: BarChart3,
-    features: ["Market share %", "Medicare payments", "Avg patient age", "Risk scores"],
+    features: ["Market share %", "Patient conditions", "Dual eligible %", "Risk scores"],
+    profilePath: "/hospice/[npi]",
   },
   {
     href: "/hospital-opportunity",
@@ -45,9 +46,16 @@ const TOOLS = [
 
 const PROFILE_CARDS = [
   {
+    href: "/hospice/",
+    label: "Hospice Provider Profile",
+    sub: "Full Medicare PAC data, patient conditions, demographics & market competitors",
+    icon: Heart,
+    hint: "Navigate from Hospice Market results",
+  },
+  {
     href: "/provider/",
-    label: "Provider Profile",
-    sub: "Full NPI + Medicare Part B data",
+    label: "NPI Provider Profile",
+    sub: "Full NPI + Medicare Part B billing history",
     icon: User,
     hint: "Navigate from NPI Lookup results",
   },
@@ -148,7 +156,7 @@ export default function DashboardPage() {
       <p className="mb-4 text-sm text-[hsl(var(--muted-foreground))]">
         Click any NPI, CCN, or facility name in the search results to open its full profile.
       </p>
-      <div className="mb-8 grid gap-4 sm:grid-cols-3">
+      <div className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {PROFILE_CARDS.map((p) => {
           const Icon = p.icon;
           return (
