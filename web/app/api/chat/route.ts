@@ -13,7 +13,16 @@ import {
   getNursingHomeProfile,
 } from "@/lib/cms-direct";
 
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+// Lazy-initialize so a missing key doesn't crash the module at load time
+let _client: Anthropic | null = null;
+function getClient(): Anthropic {
+  if (!_client) {
+    const key = process.env.ANTHROPIC_API_KEY;
+    if (!key) throw new Error("ANTHROPIC_API_KEY is not set. Go to Hostinger hPanel → Node.js → Environment Variables and add ANTHROPIC_API_KEY.");
+    _client = new Anthropic({ apiKey: key });
+  }
+  return _client;
+}
 
 const tools: Anthropic.Tool[] = [
   {
@@ -215,7 +224,7 @@ export async function POST(req: NextRequest) {
         let currentMessages = [...messages];
 
         while (true) {
-          const response = await client.messages.create({
+          const response = await getClient().messages.create({
             model: "claude-sonnet-4-6",
             max_tokens: 4096,
             system: `You are a Medicare market intelligence assistant for hospice organizations. You have access to live CMS public data and can:

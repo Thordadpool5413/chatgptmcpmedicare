@@ -44,19 +44,14 @@ function findCol(row: Record<string, unknown>, candidates: string[]): string | n
   return null;
 }
 
-// Normalize CMS DKAN API responses — handles plain array, {data:[]}, {results:[]}, {data:{items:[]}} wrappers
-async function fetchDkan(url: string, opts?: RequestInit): Promise<Record<string, unknown>[]> {
-  const res = await fetch(url, { signal: AbortSignal.timeout(30_000), ...opts });
-  if (!res.ok) throw new Error(`CMS API ${res.status} — ${await res.text().then(t => t.slice(0, 120))}`);
-  const raw: unknown = await res.json();
+// Parse any CMS API JSON response into a flat array of row objects
+function parseCmsResponse(raw: unknown): Record<string, unknown>[] {
   if (Array.isArray(raw)) return raw as Record<string, unknown>[];
   if (raw && typeof raw === "object") {
     const obj = raw as Record<string, unknown>;
-    // Try top-level array fields
     for (const key of ["data", "results", "rows", "items", "records"]) {
       const val = obj[key];
       if (Array.isArray(val)) return val as Record<string, unknown>[];
-      // Handle nested: {data: {items: [...]}}
       if (val && typeof val === "object") {
         const inner = val as Record<string, unknown>;
         for (const k2 of ["items", "data", "results", "rows"]) {
@@ -66,6 +61,29 @@ async function fetchDkan(url: string, opts?: RequestInit): Promise<Record<string
     }
   }
   return [];
+}
+
+// Fetch from CMS DKAN API, normalizing all response formats
+async function fetchDkan(url: string, opts?: RequestInit): Promise<Record<string, unknown>[]> {
+  const res = await fetch(url, { signal: AbortSignal.timeout(30_000), ...opts });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`CMS API HTTP ${res.status}: ${body.slice(0, 200)}`);
+  }
+  const raw: unknown = await res.json();
+  return parseCmsResponse(raw);
+}
+
+// Try multiple size params (CMS DKAN uses "size", some endpoints use "limit")
+async function fetchDkanWithFallback(baseUrl: string, filters: Record<string, string>, preferredSize = 1000): Promise<Record<string, unknown>[]> {
+  const tryUrl = (sizeKey: string) => {
+    const p = new URLSearchParams({ [sizeKey]: String(preferredSize), offset: "0", ...filters });
+    return fetchDkan(`${baseUrl}?${p}`);
+  };
+  const data = await tryUrl("size");
+  if (data.length > 0) return data;
+  // Fallback: try "limit" in case this endpoint uses that param name
+  return tryUrl("limit");
 }
 
 export const HOSPICE_DRG_TERMS = [
@@ -129,12 +147,11 @@ export interface HospiceResult {
 }
 
 export async function getHospiceMarketShare(state?: string, maxRows = 200, city?: string): Promise<HospiceResult> {
-  // Fetch up to 5000 rows. If state is provided, filter server-side for performance.
-  const params = new URLSearchParams({ size: "5000", offset: "0" });
-  if (state) params.set("filter[Rndrng_Prvdr_State_Abrvtn]", state.toUpperCase());
-  if (city) params.set("filter[Rndrng_Prvdr_City]", city);
+  const filters: Record<string, string> = {};
+  if (state) filters["filter[Rndrng_Prvdr_State_Abrvtn]"] = state.toUpperCase();
+  if (city) filters["filter[Rndrng_Prvdr_City]"] = city;
 
-  const data = await fetchDkan(`${CMS_DATA_API}/dataset/${HOSPICE_UUID}/data?${params}`);
+  const data = await fetchDkanWithFallback(`${CMS_DATA_API}/dataset/${HOSPICE_UUID}/data`, filters, 2000);
   if (!data.length) return { rows: [], provider_column_used: "", volume_column_used: "", market_column_used: "", total_volume: 0, market_totals: {}, interpretation_note: "No data found. Try selecting a specific state." };
 
   const sample = data[0];
